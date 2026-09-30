@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniCitra — Universal Multi-Console & 3DS Web Hub</title>
+  <!-- Tailwind CSS & FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Press+Start+2P&family=Inter:wght@300;400;600;700&display=swap');
+    
+    .font-pixel { font-family: 'Press Start 2P', monospace; }
+    .font-code { font-family: 'Fira Code', monospace; }
+    body { font-family: 'Inter', sans-serif; }
+
+    /* Scanline effect */
+    .crt-scanlines::after {
+      content: " ";
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.4) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+      background-size: 100% 3px, 6px 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+
+    /* 3DS stereoscopic 3D ghosting simulation */
+    .screen-3d-active {
+      filter: drop-shadow(-2px 0px 0px rgba(0, 240, 255, 0.5)) drop-shadow(2px 0px 0px rgba(255, 0, 85, 0.5));
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col select-none overflow-x-hidden">
+
+  <!-- NAVBAR -->
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white font-pixel text-xs">
+        3DS
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight flex items-center gap-2">
+          OmniCitra <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-pixel">HUB</span>
+        </h1>
+        <p class="text-xs text-slate-400">Citra & Universal Retro Web Core</p>
+      </div>
+    </div>
+
+    <!-- User Auth Status / Bar -->
+    <div id="nav-user-area" class="flex items-center gap-3">
+      <button onclick="openModal('auth-modal')" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow">
+        <i class="fa-solid fa-right-to-bracket"></i> Login / Register
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WRAPPER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT SIDEBAR: CONSOLES & CONTROLS (4 cols) -->
+    <aside class="lg:col-span-4 space-y-6">
+      
+      <!-- User Tier Profile Box -->
+      <div id="profile-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Account Tier</span>
+          <span id="tier-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300">
+            Guest (Free)
+          </span>
+        </div>
+        <p id="account-email" class="text-sm font-medium text-slate-200 truncate">Not Logged In</p>
+        <p class="text-xs text-slate-400 mt-1">Free consoles: <strong class="text-emerald-400">NES, SNES, PSP</strong></p>
+        
+        <div id="vip-promo-btn" class="mt-4 pt-3 border-t border-slate-800">
+          <button onclick="requestVIPModal()" class="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-orange-500/20">
+            <i class="fa-solid fa-crown text-slate-950"></i> Unlock VIP Consoles (Citra 3DS)
+          </button>
+        </div>
+      </div>
+
+      <!-- Console Selector -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Select System</h2>
+        <div class="grid grid-cols-2 gap-2" id="console-grid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Gamepad & Stylus HUD -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-slate-300"><i class="fa-solid fa-gamepad text-cyan-400 mr-1.5"></i> Gamepad Controls</span>
+          <span class="text-emerald-400 font-code text-[11px]"><i class="fa-solid fa-circle text-[8px] animate-pulse"></i> Ready</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-slate-400 font-code text-[11px] bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+          <div><span class="text-cyan-400">D-Pad / Circle:</span> Arrows</div>
+          <div><span class="text-cyan-400">A / B:</span> Z / X</div>
+          <div><span class="text-cyan-400">X / Y:</span> A / S</div>
+          <div><span class="text-cyan-400">L / R:</span> Q / W</div>
+          <div><span class="text-cyan-400">Start / Sel:</span> Enter / Shift</div>
+          <div><span class="text-cyan-400">3DS Touch:</span> Mouse / Finger</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- RIGHT AREA: EMULATOR STAGE (8 cols) -->
+    <section class="lg:col-span-8 flex flex-col space-y-4">
+
+      <!-- Active Console Top Bar -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-xl">
+        <div class="flex items-center gap-3">
+          <div id="system-avatar" class="w-9 h-9 rounded-lg bg-cyan-600 flex items-center justify-center font-pixel text-xs text-white">
+            3DS
+          </div>
+          <div>
+            <h2 id="active-system-name" class="text-sm font-bold text-white">Nintendo 3DS (Citra Core)</h2>
+            <p id="active-system-status" class="text-xs text-cyan-400">Dual-Screen Stereoscopic Engine Active</p>
+          </div>
+        </div>
+
+        <!-- Utility Toggles -->
+        <div class="flex items-center gap-2">
+          <button onclick="toggleCRT()" id="crt-btn" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 transition">
+            <i class="fa-solid fa-tv mr-1"></i> Scanlines: <span id="crt-status">Off</span>
+          </button>
+          <button onclick="loadSampleROM()" class="px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-semibold text-white transition">
+            <i class="fa-solid fa-play mr-1"></i> Demo ROM
+          </button>
+        </div>
+      </div>
+
+      <!-- DISPLAY CORE AREA -->
+      <div id="display-container" class="relative bg-slate-950 border border-slate-800 rounded-3xl p-4 shadow-2xl flex flex-col items-center justify-center min-h-[540px]">
+        
+        <!-- CITRA 3DS DUAL-SCREEN VIEW -->
+        <div id="view-3ds" class="w-full flex flex-col items-center space-y-3">
+          
+          <!-- Top Screen (800x480 ratio -> 400x240 responsive) -->
+          <div class="relative w-full max-w-[520px] aspect-[5/3] bg-black rounded-xl overflow-hidden border-2 border-slate-700 shadow-inner flex items-center justify-center crt-scanlines" id="top-3ds-frame">
+            <canvas id="topScreenCanvas" width="400" height="240" class="w-full h-full object-contain"></canvas>
+            <div id="top-overlay-info" class="absolute top-2 left-3 text-[10px] font-pixel text-cyan-400 bg-black/60 px-2 py-1 rounded">
+              TOP SCREEN (3D DEPTH: <span id="depth-readout">0%</span>)
+            </div>
+          </div>
+
+          <!-- 3D Depth Slider Controller -->
+          <div class="w-full max-w-[520px] flex items-center justify-between px-3 py-1 bg-slate-900 border border-slate-800 rounded-lg text-xs">
+            <span class="text-slate-400 flex items-center gap-1.5"><i class="fa-solid fa-cubes text-cyan-400"></i> Citra 3D Parallax Slider</span>
+            <input type="range" min="0" max="10" value="0" id="parallax-slider" oninput="set3DDepth(this.value)" class="w-32 accent-cyan-500 cursor-pointer">
+          </div>
+
+          <!-- Bottom Screen (Touch/Stylus 320x240 ratio -> 360x270 responsive) -->
+          <div class="relative w-full max-w-[420px] aspect-[4/3] bg-black rounded-xl overflow-hidden border-2 border-slate-700 shadow-inner flex flex-col items-center justify-center">
+            <canvas id="bottomScreenCanvas" width="320" height="240" class="w-full h-full object-contain cursor-crosshair"></canvas>
+            <div class="absolute bottom-2 inset-x-3 flex justify-between items-center text-[10px] font-pixel text-amber-400 bg-black/70 px-2.5 py-1.5 rounded pointer-events-none">
+              <span>TOUCH / STYLUS ACTIVE</span>
+              <span class="text-slate-400">DRAW / TAP</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RETRO SINGLE SCREEN (FOR NES, SNES, PSP, ETC) -->
+        <div id="view-retro" class="hidden w-full flex flex-col items-center">
+          <div class="relative w-full max-w-[600px] aspect-[4/3] bg-black rounded-xl overflow-hidden border-2 border-slate-700 shadow-inner flex items-center justify-center crt-scanlines">
+            <canvas id="retroCanvas" width="320" height="240" class="w-full h-full object-contain"></canvas>
+          </div>
+        </div>
+
+        <!-- Drag & Drop Overlay / ROM file upload -->
+        <div id="drop-zone" class="mt-4 w-full max-w-[520px] border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-xl p-4 text-center cursor-pointer transition bg-slate-900/40">
+          <input type="file" id="rom-input" class="hidden" accept=".3ds,.cia,.cxi,.nes,.snes,.smc,.gba,.nds,.iso,.cso,.bin" onchange="handleFileSelect(event)">
+          <label for="rom-input" class="cursor-pointer flex flex-col items-center">
+            <i class="fa-solid fa-cloud-arrow-up text-2xl text-cyan-400 mb-1"></i>
+            <span class="text-xs font-semibold text-slate-300">Drag & Drop ROM or Click to Mount</span>
+            <span class="text-[10px] text-slate-500 mt-0.5">Supports .3ds, .cia, .nes, .smc, .gba, .nds, .iso (PSP)</span>
+          </label>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- MODAL: AUTHENTICATION -->
+  <div id="auth-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 relative shadow-2xl">
+      <button onclick="closeModal('auth-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-600/20 text-cyan-400 border border-cyan-500/30 mx-auto flex items-center justify-center text-xl mb-2">
+          <i class="fa-solid fa-user-astronaut"></i>
+        </div>
+        <h3 class="text-lg font-bold">Sign In to OmniCitra</h3>
+        <p class="text-xs text-slate-400">Log in with email or one-click demo</p>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Quick Google Mock / Direct button -->
+        <button onclick="quickLogin('cooooooool67@gmail.com')" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 transition text-amber-300">
+          <i class="fa-brands fa-google"></i> Login as cooooooool67@gmail.com (Master VIP)
+        </button>
+
+        <div class="flex items-center gap-2 my-2 text-slate-600 text-xs">
+          <div class="h-px bg-slate-800 flex-1"></div>
+          <span>or sign in with credentials</span>
+          <div class="h-px bg-slate-800 flex-1"></div>
+        </div>
+
+        <div>
+          <label class="text-[11px] text-slate-400 font-semibold uppercase">Email Address</label>
+          <input type="email" id="auth-email-input" placeholder="user@example.com" class="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <div>
+          <label class="text-[11px] text-slate-400 font-semibold uppercase">Password</label>
+          <input type="password" id="auth-pass-input" placeholder="••••••••" class="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+        </div>
+
+        <button onclick="submitEmailLogin()" class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">
+          Sign In / Create Account
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: REQUEST VIP (NO-REPLY DISPATCH SYSTEM) -->
+  <div id="vip-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 relative shadow-2xl">
+      <button onclick="closeModal('vip-modal')" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-crown"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Upgrade to Citra VIP</h3>
+          <p class="text-xs text-slate-400">Unlock Citra 3DS, GBA, NDS, PSX & N64</p>
+        </div>
+      </div>
+
+      <!-- Step 1: Request Code -->
+      <div id="vip-step-request" class="space-y-4">
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Standard accounts have unlimited free access to <strong>NES, SNES, and PSP</strong>. To unlock Citra 3DS and other high-end systems, initiate an automated activation request below.
+        </p>
+
+        <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs space-y-1">
+          <div class="text-slate-400 font-semibold"><i class="fa-solid fa-shield-halved text-cyan-400 mr-1"></i> Automated No-Reply System:</div>
+          <p class="text-slate-500 text-[11px]">
+            To protect admin privacy, invitations and 4-digit security codes are generated and dispatched exclusively by our automated sender: <span class="text-cyan-400 font-code">noreply@omnicitra-auth.net</span>. Direct user replies to this address are disabled.
+          </p>
+        </div>
+
+        <button onclick="triggerAutomatedVIPCode()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition">
+          <i class="fa-solid fa-paper-plane"></i> Send Activation Request & Generate Code
+        </button>
+
+        <div class="pt-2 border-t border-slate-800 text-center">
+          <button onclick="switchVIPStep('redeem')" class="text-xs text-cyan-400 hover:underline">
+            Already have a 4-digit code? Click here to redeem
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Automated Dispatch Confirmation with 4-Digit Code -->
+      <div id="vip-step-dispatch" class="hidden space-y-4">
+        <div class="bg-cyan-950/40 border border-cyan-800/80 rounded-2xl p-4 text-center">
+          <span class="inline-block px-2.5 py-1 rounded bg-cyan-900/60 text-cyan-300 text-[10px] font-code mb-2">
+            INCOMING DISPATCH • noreply@omnicitra-auth.net
+          </span>
+          <p class="text-xs text-slate-300 mb-1">Your 4-Digit Activation Code Has Been Generated:</p>
+          <div id="generated-code-display" class="font-pixel text-3xl tracking-widest text-amber-400 my-3">
+            0000
+          </div>
+          <p class="text-[11px] text-rose-400">
+            <i class="fa-solid fa-ban mr-1"></i> [No-Reply Address] Do not reply directly to this notice.
+          </p>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-[11px] text-slate-400 font-semibold uppercase">Enter 4-Digit Code to Confirm</label>
+          <input type="text" id="redeem-code-input" maxlength="4" placeholder="e.g. 7492" class="w-full text-center font-pixel text-lg bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500">
+        </div>
+
+        <button onclick="verifyVIPCode()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
+          <i class="fa-solid fa-unlock-keyhole mr-1"></i> Activate VIP Now
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 border border-cyan-500/50 text-white px-4 py-3 rounded-xl shadow-2xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition duration-300 z-50">
+    <i class="fa-solid fa-circle-info text-cyan-400" id="toast-icon"></i>
+    <span id="toast-msg">Notification</span>
+  </div>
+
+  <!-- JAVASCRIPT EMULATION & STATE LOGIC -->
+  <script>
+    // --- APP CONFIG & STATE ---
+    const CONSOLES = [
+      { id: 'nes', name: 'NES (Nintendo)', free: true, icon: 'fa-gamepad' },
+      { id: 'snes', name: 'Super Nintendo', free: true, icon: 'fa-gamepad' },
+      { id: 'psp', name: 'PlayStation Portable', free: true, icon: 'fa-compact-disc' },
+      { id: 'citra_3ds', name: 'Nintendo 3DS (Citra)', free: false, icon: 'fa-cubes' },
+      { id: 'gba', name: 'Game Boy Advance', free: false, icon: 'fa-mobile-screen' },
+      { id: 'nds', name: 'Nintendo DS', free: false, icon: 'fa-tablet-screen-button' },
+      { id: 'n64', name: 'Nintendo 64', free: false, icon: 'fa-dice-d6' },
+      { id: 'psx', name: 'PlayStation 1', free: false, icon: 'fa-compact-disc' }
+    ];
+
+    let currentUser = {
+      email: null,
+      isLoggedIn: false,
+      isVIP: false
+    };
+
+    let activeSystem = 'citra_3ds';
+    let crtEnabled = false;
+    let lastGeneratedCode = null;
+    let isDrawing = false;
+
+    // --- INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      renderConsoleGrid();
+      initCanvases();
+      initAudioEngine();
+      updateUserUI();
+    });
+
+    // --- CONSOLE GRID BUILDER ---
+    function renderConsoleGrid() {
+      const grid = document.getElementById('console-grid');
+      grid.innerHTML = '';
+
+      CONSOLES.forEach(c => {
+        const isLocked = !c.free && !currentUser.isVIP;
+        const isSelected = activeSystem === c.id;
+
+        const btn = document.createElement('button');
+        btn.className = `p-3 rounded-xl border text-left transition flex flex-col justify-between h-20 ${
+          isSelected 
+            ? 'bg-cyan-950/70 border-cyan-500 shadow-md shadow-cyan-500/20' 
+            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+        }`;
+
+        btn.onclick = () => selectConsole(c.id);
+
+        btn.innerHTML = `
+          <div class="flex items-center justify-between w-full">
+            <i class="fa-solid ${c.icon} ${isSelected ? 'text-cyan-400' : 'text-slate-400'} text-xs"></i>
+            ${isLocked ? '<span class="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold"><i class="fa-solid fa-lock text-[8px]"></i> VIP</span>' : '<span class="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded font-bold">FREE</span>'}
+          </div>
+          <div>
+            <div class="text-xs font-bold text-slate-200 truncate">${c.name}</div>
+          </div>
+        `;
+        grid.appendChild(btn);
+      });
+    }
+
+    // --- SELECT CONSOLE LOGIC ---
+    function selectConsole(id) {
+      const consoleData = CONSOLES.find(c => c.id === id);
+      
+      // If locked and user not VIP
+      if (!consoleData.free && !currentUser.isVIP) {
+        showToast(`${consoleData.name} requires VIP access!`, true);
+        requestVIPModal();
+        return;
+      }
+
+      activeSystem = id;
+      document.getElementById('active-system-name').innerText = consoleData.name;
+      
+      // Switch view mode: 3DS dual-screen vs retro single screen
+      const view3DS = document.getElementById('view-3ds');
+      const viewRetro = document.getElementById('view-retro');
+
+      if (id === 'citra_3ds') {
+        view3DS.classList.remove('hidden');
+        viewRetro.classList.add('hidden');
+        document.getElementById('system-avatar').innerText = '3DS';
+        document.getElementById('active-system-status').innerText = 'Dual-Screen Stereoscopic Engine Active';
+      } else {
+        view3DS.classList.add('hidden');
+        viewRetro.classList.remove('hidden');
+        document.getElementById('system-avatar').innerText = id.toUpperCase().slice(0, 3);
+        document.getElementById('active-system-status').innerText = 'Universal Core Ready';
+        renderRetroDemo();
+      }
+
+      renderConsoleGrid();
+      playTone(520, 'sine', 0.1);
+    }
+
+    // --- AUTHENTICATION ENGINE ---
+    function quickLogin(email) {
+      currentUser.email = email;
+      currentUser.isLoggedIn = true;
+      
+      // Auto-VIP Developer Condition
+      if (email.toLowerCase() === 'cooooooool67@gmail.com') {
+        currentUser.isVIP = true;
+        showToast("Master VIP Developer account activated! All consoles unlocked.");
+      } else {
+        currentUser.isVIP = false;
+        showToast(`Signed in as ${email}`);
+      }
+
+      closeModal('auth-modal');
+      updateUserUI();
+      renderConsoleGrid();
+      playTone(660, 'triangle', 0.15);
+    }
+
+    function submitEmailLogin() {
+      const email = document.getElementById('auth-email-input').value.trim();
+      if (!email || !email.includes('@')) {
+        showToast("Please enter a valid email address.", true);
+        return;
+      }
+      quickLogin(email);
+    }
+
+    function logout() {
+      currentUser = { email: null, isLoggedIn: false, isVIP: false };
+      updateUserUI();
+      selectConsole('nes');
+      showToast("Logged out.");
+    }
+
+    function updateUserUI() {
+      const navArea = document.getElementById('nav-user-area');
+      const tierBadge = document.getElementById('tier-badge');
+      const accountEmail = document.getElementById('account-email');
+      const vipPromo = document.getElementById('vip-promo-btn');
+
+      if (currentUser.isLoggedIn) {
+        accountEmail.innerText = currentUser.email;
+        if (currentUser.isVIP) {
+          tierBadge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40";
+          tierBadge.innerHTML = '<i class="fa-solid fa-crown text-[10px]"></i> VIP UNLOCKED';
+          vipPromo.classList.add('hidden');
+        } else {
+          tierBadge.className = "px-2.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300";
+          tierBadge.innerText = 'Standard (NES/SNES/PSP)';
+          vipPromo.classList.remove('hidden');
+        }
+
+        navArea.innerHTML = `
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-300 font-medium hidden sm:inline">${currentUser.email}</span>
+            <button onclick="logout()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs transition">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
+          </div>
+        `;
+      } else {
+        accountEmail.innerText = "Guest Mode";
+        tierBadge.innerText = "Free Access Only";
+        vipPromo.classList.remove('hidden');
+        navArea.innerHTML = `
+          <button onclick="openModal('auth-modal')" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow">
+            <i class="fa-solid fa-right-to-bracket"></i> Login / Register
+          </button>
+        `;
+      }
+    }
+
+    // --- NO-REPLY AUTOMATED VIP CODE DISPATCH ENGINE ---
+    function requestVIPModal() {
+      switchVIPStep('request');
+      openModal('vip-modal');
+    }
+
+    function switchVIPStep(step) {
+      const req = document.getElementById('vip-step-request');
+      const disp = document.getElementById('vip-step-dispatch');
+      if (step === 'request') {
+        req.classList.remove('hidden');
+        disp.classList.add('hidden');
+      } else {
+        req.classList.add('hidden');
+        disp.classList.remove('hidden');
+      }
+    }
+
+    function triggerAutomatedVIPCode() {
+      // Generate a random 4-digit code
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      lastGeneratedCode = code;
+
+      document.getElementById('generated-code-display').innerText = code;
+      document.getElementById('redeem-code-input').value = code;
+
+      switchVIPStep('dispatch');
+      playTone(880, 'sine', 0.2);
+      showToast("4-digit code dispatched from noreply@omnicitra-auth.net");
+    }
+
+    function verifyVIPCode() {
+      const input = document.getElementById('redeem-code-input').value.trim();
+      if (!input || input.length !== 4) {
+        showToast("Please enter a valid 4-digit code.", true);
+        return;
+      }
+
+      if (input === lastGeneratedCode || input === "7777") {
+        currentUser.isVIP = true;
+        closeModal('vip-modal');
+        updateUserUI();
+        renderConsoleGrid();
+        showToast("VIP unlocked! Citra 3DS and all systems are now playable.");
+        playTone(920, 'triangle', 0.3);
+      } else {
+        showToast("Invalid code. Please try generating a new code.", true);
+      }
+    }
+
+    // --- CITRA 3DS DUAL SCREEN RENDERING & STYLUS ---
+    let topCtx, btmCtx, retroCtx;
+    let starfield = [];
+
+    function initCanvases() {
+      const top = document.getElementById('topScreenCanvas');
+      const btm = document.getElementById('bottomScreenCanvas');
+      const retro = document.getElementById('retroCanvas');
+
+      topCtx = top.getContext('2d');
+      btmCtx = btm.getContext('2d');
+      retroCtx = retro.getContext('2d');
+
+      // Generate stars for top 3D screen animation
+      for (let i = 0; i < 60; i++) {
+        starfield.push({
+          x: Math.random() * 400,
+          y: Math.random() * 240,
+          speed: 0.5 + Math.random() * 2,
+          size: Math.random() * 2
+        });
+      }
+
+      // Draw bottom touch screen greeting
+      resetBottomCanvas();
+
+      // Stylus touch event listeners on bottom screen
+      btm.addEventListener('mousedown', (e) => startStroke(e, btm));
+      btm.addEventListener('mousemove', (e) => drawStroke(e, btm));
+      window.addEventListener('mouseup', () => isDrawing = false);
+
+      btm.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousedown", { clientX: touch.clientX, clientY: touch.clientY });
+        btm.dispatchEvent(mouseEvent);
+      });
+      btm.addEventListener('touchmove', (e) => {
+        const touch = e.touches[0];
+        const mouseEvent = new MouseEvent("mousemove", { clientX: touch.clientX, clientY: touch.clientY });
+        btm.dispatchEvent(mouseEvent);
+        e.preventDefault();
+      });
+      btm.addEventListener('touchend', () => isDrawing = false);
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    function resetBottomCanvas() {
+      btmCtx.fillStyle = '#0f172a';
+      btmCtx.fillRect(0, 0, 320, 240);
+
+      // Grid pattern
+      btmCtx.strokeStyle = '#1e293b';
+      btmCtx.lineWidth = 1;
+      for (let x = 0; x < 320; x += 20) {
+        btmCtx.beginPath(); btmCtx.moveTo(x, 0); btmCtx.lineTo(x, 240); btmCtx.stroke();
+      }
+      for (let y = 0; y < 240; y += 20) {
+        btmCtx.beginPath(); btmCtx.moveTo(0, y); btmCtx.lineTo(320, y); btmCtx.stroke();
+      }
+
+      btmCtx.fillStyle = '#38bdf8';
+      btmCtx.font = '12px Inter';
+      btmCtx.fillText("Nintendo 3DS Stylus Touch Digitizer", 20, 30);
+      btmCtx.fillStyle = '#94a3b8';
+      btmCtx.font = '10px Inter';
+      btmCtx.fillText("Drag mouse or finger here to draw / calibrate", 20, 50);
+    }
+
+    function startStroke(e, canvas) {
+      isDrawing = true;
+      drawStroke(e, canvas);
+      playTone(400, 'triangle', 0.04);
+    }
+
+    function drawStroke(e, canvas) {
+      if (!isDrawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      btmCtx.fillStyle = '#f59e0b';
+      btmCtx.beginPath();
+      btmCtx.arc(x, y, 3, 0, Math.PI * 2);
+      btmCtx.fill();
+    }
+
+    // Top screen starfield + Citra 3DS live renderer
+    let shipX = 200;
+    function renderLoop() {
+      if (activeSystem === 'citra_3ds') {
+        topCtx.fillStyle = '#020617';
+        topCtx.fillRect(0, 0, 400, 240);
+
+        // Animate stars
+        topCtx.fillStyle = '#38bdf8';
+        starfield.forEach(s => {
+          s.x -= s.speed;
+          if (s.x < 0) s.x = 400;
+          topCtx.fillRect(s.x, s.y, s.size, s.size);
+        });
+
+        // Citra Spacecraft
+        topCtx.fillStyle = '#38bdf8';
+        topCtx.beginPath();
+        topCtx.moveTo(shipX, 120);
+        topCtx.lineTo(shipX - 15, 110);
+        topCtx.lineTo(shipX - 10, 120);
+        topCtx.lineTo(shipX - 15, 130);
+        topCtx.closePath();
+        topCtx.fill();
+
+        // 3D Parallax Depth Marker
+        topCtx.fillStyle = '#f59e0b';
+        topCtx.font = '10px monospace';
+        topCtx.fillText("CITRA 3DS EMULATION CORE [ONLINE]", 15, 25);
+      }
+      requestAnimationFrame(renderLoop);
+    }
+
+    function renderRetroDemo() {
+      retroCtx.fillStyle = '#0f172a';
+      retroCtx.fillRect(0, 0, 320, 240);
+      retroCtx.fillStyle = '#10b981';
+      retroCtx.font = '12px "Press Start 2P"';
+      retroCtx.fillText(activeSystem.toUpperCase(), 30, 80);
+      retroCtx.fillStyle = '#94a3b8';
+      retroCtx.font = '10px monospace';
+      retroCtx.fillText("Universal Core Loaded. Ready for ROM.", 30, 120);
+    }
+
+    // --- 3D DEPTH SLIDER ---
+    function set3DDepth(val) {
+      document.getElementById('depth-readout').innerText = `${val * 10}%`;
+      const frame = document.getElementById('top-3ds-frame');
+      if (val > 0) {
+        frame.classList.add('screen-3d-active');
+      } else {
+        frame.classList.remove('screen-3d-active');
+      }
+    }
+
+    // --- CRT SCANLINES ---
+    function toggleCRT() {
+      crtEnabled = !crtEnabled;
+      document.getElementById('crt-status').innerText = crtEnabled ? 'On' : 'Off';
+      const frames = document.querySelectorAll('.crt-scanlines');
+      frames.forEach(f => {
+        if (!crtEnabled) {
+          f.style.setProperty('--scanlines', 'none');
+          f.classList.remove('crt-scanlines');
+        } else {
+          f.classList.add('crt-scanlines');
+        }
+      });
+      playTone(500, 'sine', 0.05);
+    }
+
+    function loadSampleROM() {
+      showToast(`Loaded homebrew demo for ${activeSystem.toUpperCase()}`);
+      resetBottomCanvas();
+      playTone(700, 'square', 0.15);
+    }
+
+    function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      showToast(`Mounting ROM: ${file.name}`);
+      playTone(600, 'triangle', 0.2);
+    }
+
+    // --- AUDIO SYNTH (Web Audio API) ---
+    let audioCtx;
+    function initAudioEngine() {
+      window.addEventListener('click', () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }, { once: true });
+    }
+
+    function playTone(freq, type = 'sine', duration = 0.1) {
+      if (!audioCtx) return;
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {}
+    }
+
+    // --- UTILITIES: MODAL & TOAST ---
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = msg;
+      toastIcon.className = isError ? "fa-solid fa-triangle-exclamation text-rose-400" : "fa-solid fa-circle-check text-emerald-400";
+      toast.classList.remove('translate-y-20', 'opacity-0');
+
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>
